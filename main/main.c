@@ -5,6 +5,27 @@ void workStatus(void *arg);
 
 static char *TAG = "esp8266";
 
+void gpio_init()
+{
+    ESP_LOGI(TAG, "Initializing GPIO\r\n");
+
+    gpio_config_t io_conf;
+    io_conf.pin_bit_mask = ((1 << 2));
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+
+    esp_err_t ERR = gpio_config(&io_conf);
+    if (ERR != ESP_OK)
+    {
+        ESP_LOGI(TAG, "Failed to initialize GPIO\r\n");
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Successfully initialized GPIO\r\n");
+    }
+}
 /******************************************************************************
  * FunctionName : app_main
  * Description  : entry of app application, init app function here.
@@ -28,24 +49,9 @@ void app_main(void)
  *******************************************************************************/
 void system_init(void *arg)
 {
-    ESP_LOGI(TAG, "Initializing GPIO\r\n");
+    gpio_init();
 
-    gpio_config_t io_conf;
-    io_conf.pin_bit_mask = ((1 << 2));
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    io_conf.intr_type = GPIO_INTR_DISABLE;
-
-    esp_err_t ERR = gpio_config(&io_conf);
-    if (ERR != ESP_OK)
-    {
-        ESP_LOGI(TAG, "Failed to initialize GPIO\r\n");
-    }
-    else
-    {
-        ESP_LOGI(TAG, "Successfully initialized GPIO\r\n");
-    }
+    test_main();
 
     uint16_t siz_dat = uxTaskGetStackHighWaterMark(NULL); // Info for debug
     ESP_LOGI(TAG, "system_init stack: %d\r\n", siz_dat);

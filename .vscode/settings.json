@@ -4,7 +4,9 @@
         "gpio.h": "c",
         "esp_log.h": "c",
         "stdio.h": "c",
-        "freertos.h": "c"
+        "freertos.h": "c",
+        "uspiffs.h": "c",
+        "esp_spiffs.h": "c"
     },
     "terminal.integrated.env.linux": {
         "IDF_PATH": "/opt/esp/ESP8266_RTOS_SDK"
