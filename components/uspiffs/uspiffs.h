@@ -6,12 +6,11 @@
 #include <nvs_flash.h>
 #include <esp_spiffs.h>
 
-// #define CUSTOM_NVS_PART_NAME false // Niestandardowa nazwa dla obszaru nvs - true niestandardowa, false domyślna
-// const char *nvs_part_name = "nvs"; // Nazwa obszaru dla nvs z partitions.csv (domyślna to "nvs")
+// #define USPIFFS_DEB_TAG "uspiffs"
+// #define CUSTOM_NVS_PART_NAME "nvs" // Niestandardowa nazwa dla obszaru nvs z partitions.csv (domyślna to "nvs")
 
 void init_nvs();
-bool is_data_written();
-void set_data_written_flag(bool written);
-void test_main();
+bool data_inside_spiffs();
+void data_written_to_spiffs(bool written);
 
 #endif

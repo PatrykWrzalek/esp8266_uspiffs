@@ -8,4 +8,6 @@
 
 #include <uspiffs.h>
 
+#include <test.h>
+
 #endif

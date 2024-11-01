@@ -1,7 +1,11 @@
 #include <uspiffs.h>
 
-static char *TAG = "uspiffs";
-
+/******************************************************************************
+ * FunctionName : init_nvs
+ * Description  : function initializes NVS.
+ * Parameters   : none
+ * Returns      : none
+ *******************************************************************************/
 void init_nvs()
 {
     esp_err_t RES_to_FT = nvs_flash_init(); // Próba inicjalizacji pamięci NVS (Non-Volatile Storage)
@@ -13,130 +17,95 @@ void init_nvs()
     ESP_ERROR_CHECK(RES_to_FT); // Sprawdzenie, czy po ponownej inicjalizacji wystąpił błąd
 }
 
-bool is_data_written() // Sprawdzenie czy dane zostały zapisane do SPIFFS
+/******************************************************************************
+ * FunctionName : data_inside_spiffs
+ * Description  : function checking whether data has been written to SPIFFS.
+ * Parameters   : none
+ * Returns      : 'true' - data were written to SPIFFS
+ *                'false' - data weren't written to SPIFFS
+ *******************************************************************************/
+bool data_inside_spiffs()
 {
     nvs_handle_t my_handle; // Uchwyt do operacji na NVS
-    int8_t flag = 1;        // Flaga (domyślna wartość: 1 - dane nie zostały zapisane)
+    int8_t flag = 0x00;     // Stan bitu 0 flagi 'spiffs_info' oznacza brak zapisanych danych
 
-    /*#if CUSTOM_NVS_PART_NAME*/
-    esp_err_t ERR = nvs_open("storage", NVS_READWRITE, &my_handle); // Otwórz partycję NVS o nazwie "nvs"
-                                                                    /*#else
-                                                                        esp_err_t ERR = nvs_open_from_partition(nvs_part_name, "storage", NVS_READWRITE, &my_handle);
-                                                                    #endif*/
-    if (ERR == ESP_OK)                                              // Jeśli otwarcie partycji powiodło się pobierz wartość flagi
-    {                                                               // 'data_written' z NVS, a jeśli nie istnieje, ustaw flage na 1
+#ifdef CUSTOM_NVS_PART_NAME
+    esp_err_t ERR = nvs_open_from_partition(CUSTOM_NVS_PART_NAME, "storage", NVS_READWRITE, &my_handle);
+#else
+    esp_err_t ERR = nvs_open("storage", NVS_READWRITE, &my_handle); // Otwórz partycję NVS o domyślnej nazwie "nvs"
+#endif
+    if (ERR == ESP_OK) // Jeśli otwarcie partycji powiodło się pobierz wartość flagi
+    {                  // 'spiffs_info' z NVS, a jeśli nie istnieje wyzeruj flagę
 
-        ERR = nvs_get_i8(my_handle, "data_written", &flag); // Pobierz wartość flagi 'data_written' z NVS
-        if (ERR == ESP_ERR_NVS_NOT_FOUND)                   // Sprawdzenie, czy flaga istnieje w NVS
+        ERR = nvs_get_i8(my_handle, "spiffs_info", &flag); // Pobierz wartość flagi 'spiffs_info' z NVS
+        if (ERR == ESP_ERR_NVS_NOT_FOUND)                  // Sprawdzenie, czy flaga istnieje w NVS
         {
-            flag = 1; // Ustawienie domyślnej wartości flagi, jeśli flaga nie istnieje
+#ifdef USPIFFS_DEB_TAG
+            ESP_LOGI(USPIFFS_DEB_TAG, "Flag spiffs_info isn't exist\r\n");
+#endif
+            nvs_close(my_handle); // Zamknięcie uchwytu do NVS
+            return false;         // Zwrócenie false - brak danych zapisanych w SPIFFS (flaga nie istnieje)
         }
+#ifdef USPIFFS_DEB_TAG
+        else if (ERR == ESP_ERR_NVS_KEY_TOO_LONG)
+        {
+            ESP_LOGI(USPIFFS_DEB_TAG, "Change nvs key back to 'spiffs_info'!\r\n");
+        }
+        ESP_LOGI(USPIFFS_DEB_TAG, "Read spiffs_info = %d\r\n", flag);
+#endif
         nvs_close(my_handle); // Zamknięcie uchwytu do NVS
     }
-    return (flag == 0); // Zwraca true, jeśli dane zapisane, w przeciwnym wypadku false
+
+    return (flag & (1 << 0)); // Zwraca true, jeśli dane zapisane, w przeciwnym wypadku false
 }
 
-void set_data_written_flag(bool written) // Funkcja ustawiająca flagę oznaczającą zapis danych
+/******************************************************************************
+ * FunctionName : data_written_to_spiffs
+ * Description  : function that sets whether data has or has not been written to SPIFFS.
+ * Parameters   : written - 'true' data were written
+ *                          'false' data weren't written to SPIFFS
+ * Returns      : none
+ *******************************************************************************/
+void data_written_to_spiffs(bool written) // Funkcja ustawiająca flagę oznaczającą zapis danych
 {
     nvs_handle_t my_handle; // Uchwyt do operacji na NVS
+    int8_t flag = 0x00;
 
-    /*#if CUSTOM_NVS_PART_NAME*/
+#ifdef CUSTOM_NVS_PART_NAME
+    esp_err_t ERR = nvs_open_from_partition(CUSTOM_NVS_PART_NAME, "storage", NVS_READWRITE, &my_handle);
+#else
     esp_err_t ERR = nvs_open("storage", NVS_READWRITE, &my_handle); // Otwórz partycję NVS o nazwie "nvs"
-                                                                    /*#else
-                                                                        esp_err_t ERR = nvs_open_from_partition(nvs_part_name, "storage", NVS_READWRITE, &my_handle);
-                                                                    #endif*/
-    if (ERR == ESP_OK)                                              // Sprawdzenie, czy otwarcie partycji powiodło się
+#endif
+    if (ERR == ESP_OK) // Sprawdzenie, czy otwarcie partycji powiodło się
     {
-        int8_t flag = written ? 0 : 1;                     // Ustaw flagę - 0 jeśli dane są zapisane, 1 jeśli nie są
-        ERR = nvs_set_i8(my_handle, "data_written", flag); // Zapis flagi w NVS pod flagą 'data_written'
-        if (ERR == ESP_OK)                                 // Sprawdzenie, czy zapis flagi się powiódł
+        nvs_get_i8(my_handle, "spiffs_info", &flag);      // Pobierz wartość flagi 'spiffs_info' z NVS
+        flag |= (written << 0);                           // Ustaw bit0 flagi na - 1 jeśli dane są zapisane, 0 jeśli nie są
+        ERR = nvs_set_i8(my_handle, "spiffs_info", flag); // Zapis flagi w NVS pod flagą 'spiffs_info'
+        if (ERR == ESP_OK)                                // Sprawdzenie, czy zapis flagi się powiódł
         {
             nvs_commit(my_handle); // Zatwierdzenie zmian w NVS
-        }
-        nvs_close(my_handle); // Zamknięcie uchwytu do NVS
-    }
-}
-
-void spiffs_init_test()
-{
-    ESP_LOGI(TAG, "Initializing SPIFFS\r\n");
-    esp_vfs_spiffs_conf_t spiffs_conf;  // Struktura konfiguracyjna dla SPIFFS
-    spiffs_conf.base_path = "/spiffs";  // Ścieżka bazowa dla systemu plików
-    spiffs_conf.partition_label = NULL; // Domyślna partycja SPIFFS
-    spiffs_conf.max_files = 5;          // Maksymalna liczba otwartych plików
-    // spiffs_conf.format_if_mount_failed = is_data_written(); // Alternatywne podejście do ustawienia format_if_mount_failed
-    bool try = is_data_written(); //(0 - brak danych spiffs z formatowaniem) (1 - dane dostępne spiffs bez formatowania)
-    ESP_LOGI(TAG, "flaga 'try' = %d\r\n", try);
-    if (try) // Inicjalizacja SPIFFS bez formatowania
-    {
-        ESP_LOGI(TAG, "SPIFFS initialization without formatting\r\n");
-        spiffs_conf.format_if_mount_failed = false; // Brak formatowania, jeśli montowanie się nie powiodło
-    }
-    else // Inicjalizacja SPIFFS z formatowania
-    {
-        ESP_LOGI(TAG, "SPIFFS initialization with formatting\r\n");
-        spiffs_conf.format_if_mount_failed = true; // Formatowanie, jeśli montowanie się nie powiodło
-    }
-
-    esp_err_t ERR = esp_vfs_spiffs_register(&spiffs_conf); // Zainicjuj i zamontuj system plików SPIFFS na podstawie powyższej konfiguracji
-    if (ERR != ESP_OK)
-    {
-        if (ERR == ESP_FAIL)
-        {
-            ESP_LOGE(TAG, "Failed to mount or format filesystem\r\n"); // Błąd montowania lub formatowania systemu
-        }
-        else if (ERR == ESP_ERR_NOT_FOUND)
-        {
-            ESP_LOGE(TAG, "Failed to find SPIFFS partition\r\n"); // Nie znaleziono partycji SPIFFS
+#ifdef USPIFFS_DEB_TAG
+            ESP_LOGI(USPIFFS_DEB_TAG, "Successfuly commit changes\r\n");
         }
         else
         {
-            ESP_LOGE(TAG, "Failed to initialize SPIFFS (%s)\r\n", esp_err_to_name(ERR)); // Inny błąd inicjalizacji SPIFFS
+            ESP_LOGI(USPIFFS_DEB_TAG, "Error committing changes = %d\r\n", ERR);
         }
-        return;
-    }
-    else
-    {
-        ESP_LOGI(TAG, "Successfully initialized SPIFFS\r\n");
-    }
-}
-
-void spiffs_data_test()
-{
-    FILE *f;
-    bool try = is_data_written(); //(0 - brak danych spiffs z formatowaniem) (1 - dane dostępne spiffs bez formatowania)
-    if (!try)
-    {
-        ESP_LOGI(TAG, "Opening file...\r\n");
-        f = fopen("/spiffs/hello.txt", "w"); // Otwarcie pliku do zapisu "w" - writte (jeżeli takiego nie ma to utworzenie)
-        if (f == NULL)                       // Błąd otwierania pliku
-        {
-            ESP_LOGE(TAG, "Failed to open file for writing\r\n");
-            return;
+        ESP_LOGI(USPIFFS_DEB_TAG, "Written spiffs_info = %d\r\n", flag);
+#else
         }
-        fprintf(f, "Hello World!");        // Zapisanie tekstu do pliku
-        fclose(f);                         // Zamknięcie pliku
-        ESP_LOGI(TAG, "File written\r\n"); // Informacja o zakończeniu zapisu
+#endif
+        nvs_close(my_handle); // Zamknięcie uchwytu do NVS
     }
-
-    ESP_LOGI(TAG, "Reading file...\r\n");
-    f = fopen("/spiffs/hello.txt", "r"); // Otwarcie pliku do odczytu "r" - read
-    if (f == NULL)
-    {
-        ESP_LOGE(TAG, "Failed to open file for reading\r\n"); // Błąd otwierania pliku do odczytu
-        return;
-    }
-    char line[64];
-    fgets(line, sizeof(line), f); // Odczytanie linii z pliku
-    ESP_LOGI(TAG, "Read from file: < %s >", line);
-    fclose(f); // Zamknięcie pliku
-
-    set_data_written_flag(true); // Dane zapisane i odczytane prawidłowo (dane już istnieją)
 }
 
-void test_main()
-{
-    init_nvs();
-    spiffs_init_test();
-    spiffs_data_test();
-}
+/******************************************************************************
+                     TTTTTTTT  EEEEE  SSSSSS  TTTTTTTT
+                        TT     EE     SS         TT
+                        TT     EEEE   SSSSSS     TT
+                        TT     EE         SS     TT
+                        TT     EEEEE  SSSSSS     TT
+ *******************************************************************************/
+/******************************************************************************
+ * An area of ​​code that is in the testing stage.
+ *******************************************************************************/

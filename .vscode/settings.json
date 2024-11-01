@@ -6,7 +6,8 @@
         "stdio.h": "c",
         "freertos.h": "c",
         "uspiffs.h": "c",
-        "esp_spiffs.h": "c"
+        "esp_spiffs.h": "c",
+        "nvs_flash.h": "c"
     },
     "terminal.integrated.env.linux": {
         "IDF_PATH": "/opt/esp/ESP8266_RTOS_SDK"
