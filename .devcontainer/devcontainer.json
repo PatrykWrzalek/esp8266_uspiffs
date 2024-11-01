@@ -1,0 +1,19 @@
+{
+	"name": "ESP8266 Dev",
+	"context": "..",
+	"workspaceFolder": "/workspace",
+	"runArgs": [
+		"--device=/dev/ttyUSB0"
+	],
+	"extensions": [
+		"ms-vscode.cpptools"
+	],
+	"settings": {
+		"terminal.integrated.shell.linux": "/bin/bash"
+	},
+	"mounts": [
+		"type=bind,source=${localWorkspaceFolder},target=/workspace"
+	],
+	"image": "esp8266-rtos-sdk:v1.0.0",
+	"remoteUser": "root"
+}
