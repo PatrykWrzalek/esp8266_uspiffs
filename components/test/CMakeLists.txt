@@ -1,3 +1,3 @@
 idf_component_register(SRCS "test.c"
                        INCLUDE_DIRS "."
-                       REQUIRES main uspiffs)
+                       REQUIRES main uspiffs freertos)

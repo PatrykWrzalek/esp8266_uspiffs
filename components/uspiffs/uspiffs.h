@@ -6,11 +6,13 @@
 #include <nvs_flash.h>
 #include <esp_spiffs.h>
 
-// #define USPIFFS_DEB_TAG "uspiffs"
+#define USPIFFS_DEB_TAG "uspiffs"
 // #define CUSTOM_NVS_PART_NAME "nvs" // Niestandardowa nazwa dla obszaru nvs z partitions.csv (domyślna to "nvs")
 
 void init_nvs();
 bool data_inside_spiffs();
 void data_written_to_spiffs(bool written);
+
+esp_err_t uspiffs_init(esp_vfs_spiffs_conf_t *uspiffs_conf);
 
 #endif

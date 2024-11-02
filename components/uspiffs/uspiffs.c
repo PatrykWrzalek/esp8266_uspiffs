@@ -89,7 +89,7 @@ void data_written_to_spiffs(bool written) // Funkcja ustawiająca flagę oznacza
         }
         else
         {
-            ESP_LOGI(USPIFFS_DEB_TAG, "Error committing changes = %d\r\n", ERR);
+            ESP_LOGE(USPIFFS_DEB_TAG, "Error committing changes = %s\r\n", esp_err_to_name(ERR));
         }
         ESP_LOGI(USPIFFS_DEB_TAG, "Written spiffs_info = %d\r\n", flag);
 #else
@@ -109,3 +109,57 @@ void data_written_to_spiffs(bool written) // Funkcja ustawiająca flagę oznacza
 /******************************************************************************
  * An area of ​​code that is in the testing stage.
  *******************************************************************************/
+
+/******************************************************************************
+ * FunctionName : uspiffs_init
+ * Description  : function initializes SPIFFS.
+ * Parameters   : uspiffs_conf - ointer to esp_vfs_spiffs_conf_t configuration structure
+ * Returns      : - ESP_OK                  if success
+ *                - ESP_ERR_NO_MEM          if objects could not be allocated
+ *                - ESP_ERR_INVALID_STATE   if already mounted or partition is encrypted
+ *                - ESP_ERR_NOT_FOUND       if partition for SPIFFS was not found
+ *                - ESP_FAIL                if mount or format fails
+ *******************************************************************************/
+esp_err_t uspiffs_init(esp_vfs_spiffs_conf_t *uspiffs_conf)
+{
+    bool spiffs_have_data = data_inside_spiffs(); // 0 - brak danych, 1 - dane dostępne
+#ifdef USPIFFS_DEB_TAG
+    ESP_LOGI(USPIFFS_DEB_TAG, "Initializing uspiffs...\r\n");
+    if (spiffs_have_data)
+    {
+        ESP_LOGI(USPIFFS_DEB_TAG, "Data inside SPIFFS initialization without formatting\r\n");
+    }
+    else
+    {
+        ESP_LOGI(USPIFFS_DEB_TAG, "No data inside SPIFFS initialization with formatting\r\n");
+    }
+#endif
+    uspiffs_conf->format_if_mount_failed = !spiffs_have_data; // Formatowanie lub brak, jeśli montowanie się nie powiodło
+
+    esp_err_t ERR = esp_vfs_spiffs_register((const esp_vfs_spiffs_conf_t *)uspiffs_conf); // Zainicjuj i zamontuj system plików SPIFFS
+    if (ERR != ESP_OK)
+    {
+#ifdef USPIFFS_DEB_TAG
+        if (ERR == ESP_FAIL)
+        {
+            ESP_LOGE(USPIFFS_DEB_TAG, "Failed to mount or format filesystem\r\n"); // Błąd montowania lub formatowania systemu
+        }
+        else if (ERR == ESP_ERR_NOT_FOUND)
+        {
+            ESP_LOGE(USPIFFS_DEB_TAG, "Failed to find SPIFFS partition\r\n"); // Nie znaleziono partycji SPIFFS
+        }
+        else
+        {
+            ESP_LOGE(USPIFFS_DEB_TAG, "Failed to initialize SPIFFS (%s)\r\n", esp_err_to_name(ERR)); // Inny błąd inicjalizacji SPIFFS
+        }
+#endif
+        return ERR;
+    }
+    else
+    {
+#ifdef USPIFFS_DEB_TAG
+        ESP_LOGI(USPIFFS_DEB_TAG, "Successfully initialized SPIFFS\r\n");
+#endif
+        return ESP_OK;
+    }
+}

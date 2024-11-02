@@ -36,7 +36,7 @@ void gpio_init()
  *******************************************************************************/
 void app_main(void)
 {
-    xTaskCreate(system_init, "Init_system", 2048, NULL, 9, NULL);
+    xTaskCreate(system_init, "Init_system", 4096, NULL, 9, NULL);
 
     xTaskCreate(workStatus, "Status", 1024, NULL, 1, NULL);
 }
