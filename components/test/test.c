@@ -83,43 +83,67 @@ void test_main()
         uint32_t timer_start = esp_timer_get_time(); // Zapisz czas początkowy
         uint32_t timer_duration = 10000000;          // 10 sekund w mikrosekundach
         ESP_LOGI(TAG, "Time start: %d\r\n", timer_start);
-        bool next_w_command = false;
 
-        // uint8_t buffer_index = 0;
         while (esp_timer_get_time() - timer_start < timer_duration)
         {
             uint16_t len_data_comming = uart_read_bytes(UART_NUM_0, u_data, BUFFOR_L, 100 / portTICK_RATE_MS); // Odczyt danych z UART
 
             if (len_data_comming >= BUFFOR_L)
-            { // Jeżeli danych przychodzących jest więcej niż, miejsca w buforze
-                ESP_LOGE(TAG, "To many inncoming data!\r\n");
+            {
+                ESP_LOGE(TAG, "Too many incoming data!\r\n");
             }
             else if (len_data_comming > 0)
-            { // Jeżeli przyszły jakiekolwiek dane
-                char *command = uspiffs_first_command_finder((char *)u_data);
-                if (command == start_command)
+            {
+                char *contents = NULL;
+                uint16_t current_index = 0;           // Indeks do bieżącej pozycji w buforze
+                uint16_t pro_data = 0;                // Ilość danych przetworzonych
+                uint16_t rem_data = len_data_comming; // Ilość danych do przetworzenia
+
+                // Pętla przetwarzania
+                while (rem_data)
                 {
-                    char *contents = uspiffs_contents(start_command, (char *)write_command, u_data, len_data_comming);
-                    if (contents == NULL)
+                    char *command = uspiffs_first_command_finder((char *)(u_data + current_index)); // Znajdź nową komendę
+
+                    if (command == NULL)
                     {
-                        len_data_comming = 0;
+                        ESP_LOGI(TAG, "Brak dalszych komend do przetworzenia!\r\n");
+                        break; // Jeśli nie ma więcej komend, zakończ pętlę
+                    }
+
+                    // Sprawdzenie i przetwarzanie komendy
+                    if (strstr(command, start_command))
+                    {
+                        contents = uspiffs_contents(command, (char *)write_command, (uint8_t *)(u_data + current_index), &rem_data);
+                    }
+                    else if (strstr(command, write_command))
+                    {
+                        contents = uspiffs_contents(command, (char *)next_command, (uint8_t *)(u_data + current_index), &rem_data);
                     }
                     else
                     {
-                        next_w_command = true;
+                        ESP_LOGI(TAG, "Zła komenda!\r\n");
+                        break; // Jeśli nie ma więcej komend, zakończ pętlę
                     }
-                }
-                if ((command == write_command) || (next_w_command))
-                {
-                    char *contents = uspiffs_contents(write_command, (char *)next_command, u_data, len_data_comming);
+
                     if (contents == NULL)
                     {
-                        len_data_comming = 0;
+                        ESP_LOGE(TAG, "Błąd podczas przetwarzania komendy: '%s'\r\n", command);
+                        break; // Błąd przetwarzania
                     }
                     else
                     {
-                        next_w_command = false;
+                        pro_data = (len_data_comming - rem_data); // Oblicz długość przetworzonych danych
+                        free(contents);
+                        ESP_LOGI(TAG, "Current index: '%d'\r\n", current_index);
+                        ESP_LOGI(TAG, "All incomes data: '%d'\r\n", len_data_comming);
+                        ESP_LOGI(TAG, "Remaining data: '%d'\r\n", rem_data);
+                        ESP_LOGI(TAG, "Processed data: '%d'\r\n", pro_data);
                     }
+
+                    current_index = 0;         // Przesuwanie zawsze następuje od początku
+                    current_index += pro_data; // Przesuń indeks do następnej komendy
+
+                    ESP_LOGI(TAG, "NEW DATA: '%s'\r\n", (char *)(u_data + current_index));
                 }
             }
         }

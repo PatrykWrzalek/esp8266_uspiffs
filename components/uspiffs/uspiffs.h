@@ -18,6 +18,6 @@ void data_written_to_spiffs(bool written);
 esp_err_t uspiffs_init(esp_vfs_spiffs_conf_t *uspiffs_conf);
 char *uspiffs_first_command_finder(char *moved_buffer);
 char *uspiffs_get_contents(const char *contents_start, const char *contents_end);
-char *uspiffs_contents(char *bgn_command, char *end_command, uint8_t *moved_buffer, uint16_t len_moved_buffer);
+char *uspiffs_contents(char *bgn_command, char *end_command, uint8_t *moved_buffer, uint16_t *len_moved_buffer);
 
 #endif
