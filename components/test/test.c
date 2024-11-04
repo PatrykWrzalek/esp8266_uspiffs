@@ -42,75 +42,6 @@ void spiffs_data_test()
     data_written_to_spiffs(true); // Dane zapisane i odczytane prawidłowo (dane już istnieją)
 }
 
-char *get_difference(const char *src1, const char *src2)
-{
-    const char *pos = strstr(src1, src2);
-    if (pos)
-    {
-        // Obliczamy długość różnicy
-        size_t diff_length = pos - src1;
-        // Tworzymy nowy bufor na wynik
-        char *result = (char *)malloc(diff_length + 1); // +1 na znak null
-        if (result)
-        {
-            strncpy(result, src1, diff_length);
-            result[diff_length] = '\0'; // Null-terminator
-        }
-        return result;
-    }
-    // Zwracamy NULL, jeśli src2 nie jest częścią src1
-    return NULL;
-}
-
-void uart_data_reading(uint8_t *u_data)
-{
-    uint16_t len = uart_read_bytes(UART_NUM_0, u_data, BUFFOR_L, 20 / portTICK_RATE_MS); // Read data from the UART
-    if (len >= BUFFOR_L)
-    {
-        ESP_LOGE(TAG, "To many inncoming data!\r\n");
-    }
-    else if (len > 0)
-    {
-        char *usf_start = strstr((const char *)u_data, (const char *)start_command); // Znalezienie początku informacji 'start_command'
-        if (usf_start != NULL)                                                       // Początek informacji 'start_command' znaleziony
-        {
-            usf_start += (strlen((const char *)start_command) - 1);                               // Przesunięcie początku bufora na pozycję z nazwą pliku
-            char *usf_contents_start = strstr((const char *)u_data, (const char *)write_command); // Znalezienie początku informacji 'write_command'
-            if (usf_contents_start != NULL)                                                       // Początek informacji 'write_command' znaleziony
-            {
-                char *file_name = get_difference(usf_start, usf_contents_start);
-                if (file_name)
-                {
-                    ESP_LOGI(TAG, "Recived file name: %s\r\n", file_name);
-                    free(file_name); // Zwolnienie pamięci na nazwę pliku
-                }
-                else
-                {
-                    ESP_LOGE(TAG, "File name not found!\r\n");
-                }
-                usf_contents_start += strlen((const char *)write_command); // Przesunięcie początku bufora na pozycję początku treści
-
-                char *usf_contents_end = strstr((const char *)u_data, (const char *)next_command); // Znalezienie końca informacji 'write_command'
-                if (usf_contents_end != NULL)                                                      // Koniec informacji 'write_command' znaleziony
-                {
-                    char *usf_contents = get_difference(usf_contents_start, usf_contents_end);
-                    if (usf_contents)
-                    {
-                        ESP_LOGI(TAG, "Recived contents: %s\r\n", usf_contents);
-                        free(usf_contents); // Zwolnienie pamięci na nazwę pliku
-                    }
-                    else
-                    {
-                        ESP_LOGE(TAG, "File contents not found!\r\n");
-                    }
-                }
-            }
-        }
-
-        ESP_LOGI(TAG, "All data being recived: %s\r\n", (char *)u_data);
-    }
-}
-
 void test_main()
 {
     /////////////////////////////////////////////////////
@@ -152,11 +83,45 @@ void test_main()
         uint32_t timer_start = esp_timer_get_time(); // Zapisz czas początkowy
         uint32_t timer_duration = 10000000;          // 10 sekund w mikrosekundach
         ESP_LOGI(TAG, "Time start: %d\r\n", timer_start);
+        bool next_w_command = false;
 
         // uint8_t buffer_index = 0;
         while (esp_timer_get_time() - timer_start < timer_duration)
         {
-            uart_data_reading(u_data);
+            uint16_t len_data_comming = uart_read_bytes(UART_NUM_0, u_data, BUFFOR_L, 100 / portTICK_RATE_MS); // Odczyt danych z UART
+
+            if (len_data_comming >= BUFFOR_L)
+            { // Jeżeli danych przychodzących jest więcej niż, miejsca w buforze
+                ESP_LOGE(TAG, "To many inncoming data!\r\n");
+            }
+            else if (len_data_comming > 0)
+            { // Jeżeli przyszły jakiekolwiek dane
+                char *command = uspiffs_first_command_finder((char *)u_data);
+                if (command == start_command)
+                {
+                    char *contents = uspiffs_contents(start_command, (char *)write_command, u_data, len_data_comming);
+                    if (contents == NULL)
+                    {
+                        len_data_comming = 0;
+                    }
+                    else
+                    {
+                        next_w_command = true;
+                    }
+                }
+                if ((command == write_command) || (next_w_command))
+                {
+                    char *contents = uspiffs_contents(write_command, (char *)next_command, u_data, len_data_comming);
+                    if (contents == NULL)
+                    {
+                        len_data_comming = 0;
+                    }
+                    else
+                    {
+                        next_w_command = false;
+                    }
+                }
+            }
         }
 
         timer_start = esp_timer_get_time();

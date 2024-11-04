@@ -163,3 +163,140 @@ esp_err_t uspiffs_init(esp_vfs_spiffs_conf_t *uspiffs_conf)
         return ESP_OK;
     }
 }
+
+/******************************************************************************
+ * FunctionName : uspiffs_command_finder
+ * Description  : none
+ * Parameters   : none
+ * Returns      : none
+ *******************************************************************************/
+char *uspiffs_first_command_finder(char *moved_buffer)
+{
+    char *start_command = "$usf/";   // Komenda początku uspiffs po niej znajduje się nazwa pliku
+    char *write_command = "$usf_w$"; // Komenda początku treści dla pliku
+    char *next_command = "$usf_n$";  // Komenda końca treści dla pliku
+
+    char *s_commands = strstr((const char *)moved_buffer, (const char *)start_command); // Szukanie komendy 'start_command'
+    char *w_commands = strstr((const char *)moved_buffer, (const char *)write_command); // Szukanie komendy 'write_command'
+
+    if ((s_commands == NULL) && (w_commands == NULL)) // Nie znaleziono rzadnej komendy początku
+    {
+#ifdef USPIFFS_DEB_TAG
+        ESP_LOGI(USPIFFS_DEB_TAG, "There is no start command in the buffer!\r\n");
+#endif
+        return NULL;
+    }
+
+    uint16_t size_start = s_commands ? (uint16_t)(s_commands - moved_buffer) : UINT16_MAX; // Obliczanie pozycji dla każdej komendy, jeśli istnieją
+    uint16_t size_write = w_commands ? (uint16_t)(w_commands - moved_buffer) : UINT16_MAX;
+
+    if (size_start < size_write) // Wybieranie komendy na podstawie pozycji w buforze
+    {
+#ifdef USPIFFS_DEB_TAG
+        ESP_LOGI(USPIFFS_DEB_TAG, "First command in buffer is: '%s'\r\n", start_command);
+#endif
+        return (char *)start_command;
+    }
+    else
+    {
+#ifdef USPIFFS_DEB_TAG
+        ESP_LOGI(USPIFFS_DEB_TAG, "First command in buffer is: '%s'\r\n", write_command);
+#endif
+        return (char *)write_command;
+    }
+}
+
+/******************************************************************************
+ * FunctionName : uspiffs_contents
+ * Description  : none
+ * Parameters   : none
+ * Returns      : none
+ *******************************************************************************/
+char *uspiffs_contents(char *bgn_command, char *end_command, uint8_t *moved_buffer, uint16_t len_moved_buffer)
+{
+    char *start_command = "$usf/"; // Komenda początku uspiffs po niej znajduje się nazwa pliku
+
+    /**********************************************************************************/
+    /*  Sprawdzenie czy obie komendy początku i końca są częsią danych przychodzących */
+    /**********************************************************************************/
+
+    // 1) Wskaźnik 'contents' wskazuje całość danych (z 'moved_buffer') znajdującą się za komendą początku
+    char *contents = strstr((const char *)moved_buffer, (const char *)bgn_command); // Szukanie komendy początku
+    if (contents == NULL)                                                           // Nie znaleziono początku informacji
+    {
+#ifdef USPIFFS_DEB_TAG
+        ESP_LOGE(USPIFFS_DEB_TAG, "Not found contents start!\r\n");
+#endif
+        return NULL;
+    }
+    int bgn_position = (int)(contents - (char *)moved_buffer); // Wyznaczenie pozycji początku wiadomości
+    bgn_position += (int)strlen(bgn_command);                  // Przesunięcie początku wiadomości na początek treści
+    if (len_moved_buffer <= bgn_position)                      // Sprawdzenie czy nie występuje overflow
+    {
+#ifdef USPIFFS_DEB_TAG
+        ESP_LOGE(USPIFFS_DEB_TAG, "Overflow error for command: %s!\r\n", bgn_command);
+#endif
+        return NULL;
+    }
+
+    // 2) Wskaźnik 'contents' wskazuje całość danych (z 'moved_buffer') znajdującą się za komendą końca
+    contents = strstr((const char *)(moved_buffer + bgn_position), (const char *)end_command); // Szukanie komendy końca
+    if (contents == NULL)                                                                      // Nie znaleziono końca informacji
+    {
+#ifdef USPIFFS_DEB_TAG
+        ESP_LOGE(USPIFFS_DEB_TAG, "Not found contents end!\r\n");
+#endif
+        return NULL;
+    }
+    int end_position = (int)(contents - (char *)moved_buffer); // Wyznaczenie pozycji końca treści
+    end_position += (int)strlen(end_command);                  // Przesunięcie końca treści na koniec wiadomości
+    if (len_moved_buffer < end_position)                       // Sprawdzenie czy nie występuje overflow
+    {
+#ifdef USPIFFS_DEB_TAG
+        ESP_LOGE(USPIFFS_DEB_TAG, "Overflow error for command: %s!\r\n", end_command);
+#endif
+        return NULL;
+    }
+
+    // 3) Sprawdzenie czy w buforze znajduje się treść
+    end_position -= (int)strlen((const char *)end_command); // Przesunięcie końca wiadomości na koniec treści
+    if (end_position == bgn_position)                       // Sprawdzenie czy wiadomość ma treść
+    {
+#ifdef USPIFFS_DEB_TAG
+        ESP_LOGE(USPIFFS_DEB_TAG, "Invalid range between start and end!\r\n");
+#endif
+        return NULL;
+    }
+
+    /**********************************************************************************/
+    /*                  Sprawdzenie czy wiadomość z bufora ma treść                   */
+    /**********************************************************************************/
+
+    end_position -= bgn_position; // Zmienna 'end_position' wskazuje długość treści do skopiowania
+
+    // contents = (char *)malloc(end_position); // Alokacja bufora `contents` dla skopiowanej treści
+    contents = (char *)malloc(end_position + 1); // +1 na znak '\0'
+    if (contents == NULL)
+    {
+#ifdef USPIFFS_DEB_TAG
+        ESP_LOGE(USPIFFS_DEB_TAG, "Memory allocation failed for contents!\r\n");
+#endif
+        return NULL;
+    }
+    memcpy(contents, moved_buffer + bgn_position, end_position); // Kopiowanie treści z `moved_buffer` do `contents`
+    contents[end_position] = '\0';                               // Zakończenie ciągu znakowego
+    // Odjęcie od ilości danych w buforze ('moved_buffer') danych, które zostały już przetworzone
+    len_moved_buffer -= ((end_position + bgn_position) + (int)strlen((const char *)end_command));
+    if (bgn_command == start_command)
+    { // Wyjątek, po komendzie startu komendą końca jest write_command, która może być jednocześnie komędą początku!
+        len_moved_buffer += strlen((const char *)end_command);
+    }
+
+#ifdef USPIFFS_DEB_TAG
+    ESP_LOGI(USPIFFS_DEB_TAG, "Contents: '%s'!\r\n", contents);
+    ESP_LOGI(USPIFFS_DEB_TAG, "Rest data in incoming buffer: %d!\r\n", len_moved_buffer);
+    ESP_LOGI(USPIFFS_DEB_TAG, "Data in incoming buffer: '%s'!\r\n", moved_buffer);
+#endif
+
+    return contents;
+}
